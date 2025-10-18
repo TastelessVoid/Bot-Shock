@@ -1,0 +1,30 @@
+include README.md
+include LICENSE
+include requirements.txt
+include .env.example
+recursive-include botshock *.py
+recursive-exclude botshock __pycache__
+recursive-exclude botshock *.pyc
+# Bot Shock - Example Environment Configuration
+
+# Required: Your Discord bot token
+# Get this from https://discord.com/developers/applications
+DISCORD_TOKEN=your_discord_bot_token_here
+
+# Required: Encryption key for securing API tokens
+# Generate using: botshock-keygen (or python -m botshock.scripts.generate_key)
+ENCRYPTION_KEY=your_encryption_key_here
+
+# Optional: Database configuration
+# DATABASE_PATH=botshock.db
+# DATABASE_POOL_SIZE=5
+
+# Optional: API configuration
+# API_BASE_URL=https://api.openshock.app
+# API_TIMEOUT=10
+# API_MAX_CONNECTIONS=100
+# API_REQUESTS_PER_MINUTE=60
+
+# Optional: Logging configuration
+# LOG_LEVEL=INFO
+# LOG_DIR=logs
