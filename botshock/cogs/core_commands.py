@@ -31,4 +31,5 @@ class CoreCommands(commands.Cog):
 
 def setup(bot: commands.InteractionBot):
     bot.add_cog(CoreCommands(bot))
+    logger.info("CoreCommands cog has been loaded")
 

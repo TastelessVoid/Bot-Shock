@@ -57,6 +57,10 @@ Please see the [docs](/docs) directory.
 
 Review the [Privacy Policy](PRIVACY.md) to understand how Bot Shock handles your data.
 
+## Terms of Service
+
+By using this software you agree to the [Terms of Service](TERMS.md). Please read them carefully.
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

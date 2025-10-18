@@ -1,5 +1,6 @@
 include README.md
 include LICENSE
+include TERMS.md
 include requirements.txt
 include .env.example
 recursive-include botshock *.py
