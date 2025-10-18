@@ -111,7 +111,7 @@ class TestCogLoading:
             bot.load_all_cogs()
 
             # Verify load_extension was called for each cog
-            assert mock_load.call_count == 9  # We have 9 cogs
+            assert mock_load.call_count == 10
 
             # Verify specific cogs were loaded
             loaded_cogs = [call[0][0] for call in mock_load.call_args_list]

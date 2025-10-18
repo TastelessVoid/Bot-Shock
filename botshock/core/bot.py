@@ -56,6 +56,7 @@ class BotShock(commands.InteractionBot):
         super().__init__(
             intents=intents,
             test_guilds=config.test_guilds if hasattr(config, "test_guilds") else None,
+            reload=True,
         )
 
         self.config = config
@@ -116,11 +117,6 @@ class BotShock(commands.InteractionBot):
         await self.change_presence(
             activity=disnake.Activity(type=disnake.ActivityType.watching, name="OpenShock users")
         )
-
-    @commands.slash_command(name="ping", description="Check if the bot is responsive")
-    async def ping(self, inter: disnake.ApplicationCommandInteraction):
-        """Check if the bot is responsive."""
-        await inter.response.send_message("Pong! 🏓")
 
     @staticmethod
     async def on_connect():
@@ -233,6 +229,7 @@ class BotShock(commands.InteractionBot):
             "botshock.cogs.settings",
             "botshock.cogs.action_logs",
             "botshock.cogs.event_listeners",
+            "botshock.cogs.core_commands",  # Added core_commands cog which provides the /ping command and similar small utilities
         ]
 
         loaded = 0
