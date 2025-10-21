@@ -29,7 +29,7 @@ Download Python from [python.org](https://www.python.org/downloads/) and install
 
 ```bash
 # If using git
-git clone <repository-url>
+git clone https://github.com/TastelessVoid/Bot-Shock
 cd BotShock
 
 # Or download and extract the ZIP file, then navigate to the folder

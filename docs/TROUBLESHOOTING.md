@@ -547,10 +547,9 @@ When reporting issues, include:
 
 ### Additional Resources
 
-- Check README.md for basic setup
-- Review CONFIGURATION.md for environment variables
-- See SECURITY.md for security-related issues
-- Consult COMMANDS.md for command usage
+- Check [README](../README.md) for basic setup
+- Review [CONFIGURATION](CONFIGURATION.md) for environment variables
+- Consult [COMMANDS](COMMANDS.md) for command usage
 
 ---
 
