@@ -730,6 +730,7 @@ class ConfirmMultipleControllersView(disnake.ui.View):
         added_count = 0
         failed_count = 0
         added_names = []
+        dm_failed = []  # Track users who couldn't receive DMs
 
         # Add each controller
         for controller_obj in self.controller_objs:
@@ -742,6 +743,47 @@ class ConfirmMultipleControllersView(disnake.ui.View):
                     controller_discord_id=controller_obj.id,
                 )
                 obj_type = "user"
+
+                if success:
+                    try:
+                        dm_embed = disnake.Embed(
+                            title="🎮 You've Been Added as a Controller",
+                            description=f"{self.author.mention} has granted you control permission in **{inter.guild.name}**!",
+                            color=disnake.Color.green(),
+                            timestamp=disnake.utils.utcnow(),
+                        )
+                        dm_embed.add_field(
+                            name="What This Means",
+                            value=(
+                                f"• You can now use `/shock` commands on {self.author.mention}'s device\n"
+                                f"• You can schedule reminders for them\n"
+                                f"• Please respect their boundaries and consent\n"
+                                f"• They can revoke your access at any time"
+                            ),
+                            inline=False,
+                        )
+                        dm_embed.add_field(
+                            name="⚠️ Important Reminder",
+                            value=(
+                                "**This is a serious responsibility.**\n"
+                                "• Always respect safewords and limits\n"
+                                "• Only use commands they've consented to\n"
+                                "• Communication and trust are essential"
+                            ),
+                            inline=False,
+                        )
+                        dm_embed.set_footer(text=f"Server: {inter.guild.name}")
+
+                        await controller_obj.send(embed=dm_embed)
+                        logger.info(
+                            f"DM notification sent to controller {controller_obj} ({controller_obj.id}) "
+                            f"for authorization by {self.author} ({self.author.id})"
+                        )
+                    except (disnake.Forbidden, disnake.HTTPException) as e:
+                        dm_failed.append(controller_obj.mention)
+                        logger.warning(
+                            f"Failed to send DM to controller {controller_obj} ({controller_obj.id}): {e}"
+                        )
             else:
                 # It's a role
                 success = await self.db.add_controller_permission(
@@ -787,6 +829,18 @@ class ConfirmMultipleControllersView(disnake.ui.View):
                 embed.add_field(
                     name="⚠️ Note",
                     value=f"{failed_count} controller(s) were skipped (may already have permission)",
+                    inline=False,
+                )
+
+            # Add notification about DM failures
+            if dm_failed:
+                dm_failed_text = ", ".join(dm_failed) if len(dm_failed) <= 5 else f"{', '.join(dm_failed[:5])}, and {len(dm_failed) - 5} more"
+                embed.add_field(
+                    name="📬 DM Notification",
+                    value=(
+                        f"⚠️ Couldn't send DM to: {dm_failed_text}\n"
+                        f"They may have DMs disabled. Consider notifying them here in chat!"
+                    ),
                     inline=False,
                 )
         else:
