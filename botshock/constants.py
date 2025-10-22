@@ -4,9 +4,11 @@ Application-wide constants for Bot Shock.
 
 from pathlib import Path
 
+from botshock import __version__
+
 APP_NAME = "Bot Shock"
 LOGGER_NAMESPACE = "BotShock"
-APP_VERSION = "1.0.0"
+APP_VERSION = __version__
 
 # Database configuration
 DEFAULT_DB_PATH = "botshock.db"
