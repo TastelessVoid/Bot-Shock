@@ -356,7 +356,7 @@ class ReminderCommands(commands.Cog):
 
     @manage_group.sub_command(description="List your scheduled reminders")
     @defer_response(ephemeral=True)
-    async def list(self, inter: disnake.ApplicationCommandInteraction):
+    async def list(
         self,
         inter: disnake.ApplicationCommandInteraction,
         user: disnake.User = commands.Param(
@@ -395,7 +395,7 @@ class ReminderCommands(commands.Cog):
         if page < 1:
             page = 1
 
-        page_reminders = reminders[(page - 1) * items_per_page : page * items_per_page]
+        start = (page - 1) * items_per_page
         end = start + items_per_page
         paginated_reminders = reminders[start:end]
 
@@ -407,13 +407,11 @@ class ReminderCommands(commands.Cog):
         # Add pagination footer
         embed.set_footer(text=f"Page {page} of {total_pages}")
 
-        await inter.edit_original_response(embed=embed)
-
         # Add view for pagination buttons
         view = ReminderListView(
             inter.author.id, inter.guild.id, reminders, page, total_pages, self.db, self.formatter
         )
-        await inter.followup.send(embed=embed, view=view, ephemeral=True)
+        await inter.edit_original_response(embed=embed, view=view)
 
 
 def setup(bot: commands.InteractionBot):
