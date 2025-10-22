@@ -209,6 +209,18 @@ class TriggerCommands(commands.Cog):
 
     @manage_group.sub_command(description="List your triggers")
     async def list(
+        self,
+        inter: disnake.ApplicationCommandInteraction,
+    ):
+        """List triggers for the invoking user (manage group)"""
+        target_user = inter.author
+
+        # No elevated permission required when listing your own triggers
+        triggers = await self.db.get_triggers(target_user.id, inter.guild.id)
+
+        embed = self.formatter.format_trigger_list(triggers, None)
+        await inter.response.send_message(embed=embed, ephemeral=True)
+
     async def remove(
         self,
         inter: disnake.ApplicationCommandInteraction,
