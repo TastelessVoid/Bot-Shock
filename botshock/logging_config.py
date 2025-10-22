@@ -200,5 +200,10 @@ def setup_logging(
     if not _has_console_handler(root_logger):
         root_logger.addHandler(console_handler)
 
+    # Suppress verbose logs from third-party libraries
+    logging.getLogger("disnake.gateway").setLevel(logging.WARNING)
+    logging.getLogger("disnake.http").setLevel(logging.WARNING)
+    logging.getLogger("disnake").setLevel(logging.WARNING)
+
     # Return a namespaced logger for app components
     return logging.getLogger(LOGGER_NAMESPACE)
