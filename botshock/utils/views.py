@@ -5,33 +5,31 @@ Base view classes to reduce code duplication across cogs
 
 import disnake
 
+# Default error message for unauthorized interactions
+DEFAULT_UNAUTHORIZED_MESSAGE = "You cannot use this interaction."
+
 
 class AuthorOnlyView(disnake.ui.View):
-    """Base view that only allows the original author to interact"""
+    """
+    Base view that only allows the original author to interact.
 
-    def __init__(self, author_id: int, timeout: float = 180):
-        super().__init__(timeout=timeout)
-        self.author_id = author_id
-
-    async def interaction_check(self, interaction: disnake.MessageInteraction) -> bool:
-        """Ensure only the original author can use this view"""
-        if interaction.user.id != self.author_id:
-            await interaction.response.send_message(
-                "You cannot use this interaction.", ephemeral=True
-            )
-            return False
-        return True
-
-
-class AuthorOnlyViewWithCustomMessage(disnake.ui.View):
-    """Base view that only allows the original author to interact with custom message"""
+    This view enforces author-only access with an optional custom error message.
+    """
 
     def __init__(
         self,
         author_id: int,
-        error_message: str = "You cannot use this interaction.",
+        error_message: str = DEFAULT_UNAUTHORIZED_MESSAGE,
         timeout: float = 180,
     ):
+        """
+        Initialize the author-only view.
+
+        Args:
+            author_id: The ID of the user who can interact with this view
+            error_message: Custom message shown when unauthorized users try to interact
+            timeout: Timeout for the view in seconds
+        """
         super().__init__(timeout=timeout)
         self.author_id = author_id
         self.error_message = error_message
@@ -42,6 +40,10 @@ class AuthorOnlyViewWithCustomMessage(disnake.ui.View):
             await interaction.response.send_message(self.error_message, ephemeral=True)
             return False
         return True
+
+
+# Backward compatibility alias
+AuthorOnlyViewWithCustomMessage = AuthorOnlyView
 
 
 class ShockerSelectView(AuthorOnlyView):

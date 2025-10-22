@@ -18,15 +18,19 @@ class FakePermissionChecker:
 
 
 class FakeDB:
-    def __init__(self, registered=True, shockers=None):
+    def __init__(self, registered=True, shockers=None, device_worn=True):
         self.registered = registered
         self._shockers = shockers or []
+        self.device_worn = device_worn
 
     async def get_user(self, user_id, guild_id):
         return {"id": user_id} if self.registered else None
 
     async def get_shockers(self, user_id, guild_id):
         return list(self._shockers)
+
+    async def get_device_worn_status(self, user_id, guild_id):
+        return self.device_worn
 
 
 @pytest.mark.asyncio

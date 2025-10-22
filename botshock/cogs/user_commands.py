@@ -82,6 +82,11 @@ class UserCommands(commands.Cog):
         """Base command for OpenShock management"""
         pass
 
+    @openshock.sub_command_group(name="shockers", description="Manage your registered shockers")
+    async def shockers_group(self, inter: disnake.ApplicationCommandInteraction):
+        """Manage your device shockers"""
+        pass
+
     @openshock.sub_command(
         description="Complete setup: register API token and add shockers in one step"
     )
@@ -341,10 +346,10 @@ class UserCommands(commands.Cog):
         view.add_item(confirm_button)
         view.add_item(skip_button)
 
-        await modal_inter.edit_original_response(embed=embed, view=view)
+        await inter.response.send_message(embed=embed, view=view, ephemeral=True)
 
-    @openshock.sub_command(description="Add shockers to your account")
-    async def add_shocker(self, inter: disnake.ApplicationCommandInteraction):
+    @shockers_group.sub_command(description="Add shockers to your account")
+    async def add(self, inter: disnake.ApplicationCommandInteraction):
         """Add shockers to your account by selecting from available devices"""
         await inter.response.defer(ephemeral=True)
 
@@ -503,8 +508,8 @@ class UserCommands(commands.Cog):
 
         await inter.edit_original_response(embed=embed, view=view)
 
-    @openshock.sub_command(description="Remove a shocker from your account")
-    async def remove_shocker(
+    @shockers_group.sub_command(description="Remove a shocker from your account")
+    async def remove(
         self,
         inter: disnake.ApplicationCommandInteraction,
         shocker_id: str = commands.Param(description="The shocker ID to remove"),
@@ -540,8 +545,8 @@ class UserCommands(commands.Cog):
             )
             await inter.edit_original_response(embed=embed)
 
-    @openshock.sub_command(description="List your registered shockers")
-    async def list_shockers(self, inter: disnake.ApplicationCommandInteraction):
+    @shockers_group.sub_command(description="List your registered shockers")
+    async def list(self, inter: disnake.ApplicationCommandInteraction):
         """List your registered shockers"""
         await inter.response.defer(ephemeral=True)
 
@@ -566,6 +571,93 @@ class UserCommands(commands.Cog):
         components = [self.formatter.openshock_button()] if not shockers else []
 
         await inter.edit_original_response(embed=embed, components=components)
+
+    @openshock.sub_command(description="Toggle whether you're wearing your device")
+    async def device_status(self, inter: disnake.ApplicationCommandInteraction):
+        """Toggle your device worn status"""
+        await inter.response.defer(ephemeral=True)
+
+        # Check if user is registered
+        user = await self.db.get_user(inter.author.id, inter.guild.id)
+        if not user:
+            embed = self.formatter.error_embed(
+                "Not Registered",
+                "You don't have a registered OpenShock account.",
+                field_1=(
+                    "Next Steps",
+                    "Use `/openshock setup` to set up your API token and add shockers.",
+                ),
+            )
+            await inter.edit_original_response(embed=embed)
+            return
+
+        # Get current device status
+        is_worn = await self.db.get_device_worn_status(inter.author.id, inter.guild.id)
+
+        # Toggle the status
+        new_status = not is_worn
+        success = await self.db.set_device_worn(inter.author.id, inter.guild.id, new_status)
+
+        if success:
+            status_text = "✅ Wearing" if new_status else "❌ Not Wearing"
+            embed = self.formatter.success_embed(
+                "Device Status Updated",
+                f"You are now **{status_text}** your device.",
+                field_1=(
+                    "What this means",
+                    "When you're not wearing your device, controllers won't be able to send shocks to you."
+                    if not new_status
+                    else "Controllers can now send shocks to you."
+                ),
+            )
+            logger.info(
+                f"Device status updated: {inter.author} ({inter.author.id}) in guild {inter.guild.id} - wearing: {new_status}"
+            )
+        else:
+            embed = self.formatter.error_embed(
+                "Update Failed",
+                "Could not update your device status. Please try again later.",
+            )
+
+        await inter.edit_original_response(embed=embed)
+
+    @openshock.sub_command(description="Check if you're currently wearing your device")
+    async def check_device(self, inter: disnake.ApplicationCommandInteraction):
+        """Check your current device worn status"""
+        await inter.response.defer(ephemeral=True)
+
+        # Check if user is registered
+        user = await self.db.get_user(inter.author.id, inter.guild.id)
+        if not user:
+            embed = self.formatter.error_embed(
+                "Not Registered",
+                "You don't have a registered OpenShock account.",
+                field_1=(
+                    "Next Steps",
+                    "Use `/openshock setup` to set up your API token and add shockers.",
+                ),
+            )
+            await inter.edit_original_response(embed=embed)
+            return
+
+        # Get current device status
+        is_worn = await self.db.get_device_worn_status(inter.author.id, inter.guild.id)
+
+        status_text = "✅ **Wearing**" if is_worn else "❌ **Not Wearing**"
+        description = (
+            "Your device is currently being worn. Controllers can send shocks to you."
+            if is_worn
+            else "Your device is currently not being worn. Controllers cannot send shocks to you."
+        )
+
+        embed = self.formatter.info_embed(
+            "Device Status",
+            description,
+            field_1=("Current Status", status_text),
+            field_2=("Toggle Status", "Use `/openshock device_status` to change this."),
+        )
+
+        await inter.edit_original_response(embed=embed)
 
     @openshock.sub_command(description="Unregister your OpenShock account")
     async def unregister(self, inter: disnake.ApplicationCommandInteraction):

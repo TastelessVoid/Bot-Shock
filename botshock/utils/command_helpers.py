@@ -4,9 +4,10 @@ Command helper functions to reduce code redundancy across cogs
 
 import logging
 from datetime import datetime
-from typing import Any
 
 import disnake
+
+from botshock.utils.response_handler import ResponseHandler
 
 logger = logging.getLogger("BotShock.CommandHelpers")
 
@@ -18,6 +19,7 @@ class CommandHelper:
         self.db = db
         self.permission_checker = permission_checker
         self.formatter = formatter
+        self.response_handler = ResponseHandler(formatter)
 
     async def add_shockers_bulk(
         self,
@@ -195,181 +197,7 @@ class CommandHelper:
         """
         return user if user else default_user
 
-    async def get_user_with_shockers(
-        self, user_id: int, guild_id: int
-    ) -> tuple[dict | None, list | None, str | None]:
-        """
-        Get user data and their shockers, with error messages
-
-        Args:
-            user_id: Discord user ID
-            guild_id: Guild ID
-
-        Returns:
-            Tuple of (user_data, shockers_list, error_message)
-        """
-        # Check if user is registered
-        user_data = await self.db.get_user(user_id, guild_id)
-        if not user_data:
-            return (
-                None,
-                None,
-                "User is not registered in this server. They need to use `/openshock setup` first.",
-            )
-
-        # Get user's shockers
-        shockers = await self.db.get_shockers(user_id, guild_id)
-        if not shockers:
-            return user_data, None, "User has no registered shockers in this server."
-
-        return user_data, shockers, None
-
-    async def handle_shocker_selection(
-        self,
-        inter: disnake.ApplicationCommandInteraction,
-        shockers: list,
-        shock_settings: dict[str, Any],
-    ) -> dict | None:
-        """
-        Handle shocker selection when user has multiple devices
-
-        Args:
-            inter: The interaction
-            shockers: List of available shockers
-            shock_settings: Dict with shock parameters for display
-
-        Returns:
-            Selected shocker dict or None if cancelled/timeout
-        """
-        from botshock.utils.views import ShockerSelectView
-
-        embed = self.formatter.info_embed(
-            "Select Shocker",
-            "Multiple shockers found. Please select which one to use:",
-            field_1=(
-                "Shock Settings",
-                f"⚡ Type: {shock_settings.get('type', 'Shock')}\n"
-                f"📊 Intensity: {shock_settings.get('intensity', 50)}%\n"
-                f"⏱️ Duration: {shock_settings.get('duration', 1000)}ms",
-            ),
-        )
-
-        view = ShockerSelectView(shockers, author_id=inter.author.id)
-        await inter.edit_original_response(embed=embed, view=view)
-
-        try:
-            button_inter = await inter.bot.wait_for(
-                "dropdown",
-                check=lambda i: i.author.id == inter.author.id and i.custom_id == "shocker_select",
-                timeout=180,
-            )
-            await button_inter.response.defer()
-            selected_id = button_inter.values[0]
-
-            # Find the selected shocker
-            target_shocker = next((s for s in shockers if s["shocker_id"] == selected_id), None)
-            if not target_shocker:
-                embed = self.formatter.error_embed("Error", "Selected shocker not found.")
-                await inter.edit_original_response(embed=embed, view=None)
-                return None
-
-            return target_shocker
-
-        except Exception:
-            embed = self.formatter.warning_embed("Timeout", "Shocker selection timed out.")
-            await inter.edit_original_response(embed=embed, view=None)
-            return None
-
-    async def check_cooldown(
-        self, user_id: int, guild_id: int, shocker_id: str, cooldown_seconds: int = 60
-    ) -> tuple[bool, str | None]:
-        """
-        Check if a shocker is on cooldown
-
-        Args:
-            user_id: User ID
-            guild_id: Guild ID
-            shocker_id: Shocker ID
-            cooldown_seconds: Cooldown period in seconds
-
-        Returns:
-            Tuple of (is_ready, error_message)
-        """
-        is_ready = await self.db.check_shocker_cooldown(
-            user_id, guild_id, shocker_id, cooldown_seconds
-        )
-
-        if not is_ready:
-            return False, (
-                "This device is on cooldown. Please wait before sending another shock.\n\n"
-                "**Why?** Cooldowns prevent excessive shocking and protect device hardware."
-            )
-
-        return True, None
-
-    @staticmethod
-    def format_trigger_info(trigger: dict) -> str:
-        """
-        Format trigger information for display
-
-        Args:
-            trigger: Trigger dict from database
-
-        Returns:
-            Formatted string
-        """
-        name = trigger.get("trigger_name", "Unnamed")
-        pattern = trigger.get("regex_pattern", "")
-        intensity = trigger.get("intensity", 50)
-        duration = trigger.get("duration", 1000)
-        shock_type = trigger.get("shock_type", "Shock")
-        cooldown = trigger.get("cooldown", 60)
-        enabled = trigger.get("enabled", True)
-
-        status = "🟢 Enabled" if enabled else "🔴 Disabled"
-
-        return (
-            f"**{name}** (ID: {trigger['id']})\n"
-            f"Pattern: `{pattern}`\n"
-            f"Type: {shock_type} | Intensity: {intensity}% | Duration: {duration}ms\n"
-            f"Cooldown: {cooldown}s | Status: {status}"
-        )
-
-    @staticmethod
-    def format_reminder_info(reminder: dict) -> str:
-        """
-        Format reminder information for display
-
-        Args:
-            reminder: Reminder dict from database
-
-        Returns:
-            Formatted string
-        """
-        reminder_id = reminder.get("id")
-        scheduled_time = reminder.get("scheduled_time")
-        reason = reminder.get("reason", "No reason specified")
-        intensity = reminder.get("intensity", 50)
-        duration = reminder.get("duration", 1000)
-        shock_type = reminder.get("shock_type", "Shock")
-        executed = reminder.get("executed", False)
-
-        # Parse scheduled time
-        if isinstance(scheduled_time, str):
-            scheduled_dt = datetime.fromisoformat(scheduled_time)
-            time_str = scheduled_dt.strftime("%Y-%m-%d %H:%M:%S")
-        else:
-            time_str = str(scheduled_time)
-
-        status = "✅ Completed" if executed else "⏳ Pending"
-
-        return (
-            f"**Reminder #{reminder_id}**\n"
-            f"When: {time_str}\n"
-            f"Reason: {reason}\n"
-            f"Type: {shock_type} | Intensity: {intensity}% | Duration: {duration}ms\n"
-            f"Status: {status}"
-        )
+    # ...existing code...
 
     async def send_success_with_log(
         self,
@@ -380,7 +208,8 @@ class CommandHelper:
         **kwargs,
     ):
         """
-        Send success embed and log the action
+        Send success embed and log the action.
+        DEPRECATED: Use response_handler.send_success() instead.
 
         Args:
             inter: The interaction
@@ -389,9 +218,9 @@ class CommandHelper:
             log_message: Message to log
             **kwargs: Additional fields for embed
         """
-        embed = self.formatter.success_embed(title, description, **kwargs)
-        await inter.edit_original_response(embed=embed)
-        logger.info(log_message)
+        await self.response_handler.send_success(
+            inter, title, description, log_message=log_message, **kwargs
+        )
 
     async def send_error_with_log(
         self,
@@ -402,7 +231,8 @@ class CommandHelper:
         **kwargs,
     ):
         """
-        Send error embed and log the error
+        Send error embed and log the error.
+        DEPRECATED: Use response_handler.send_error() instead.
 
         Args:
             inter: The interaction
@@ -411,9 +241,9 @@ class CommandHelper:
             log_message: Message to log
             **kwargs: Additional fields for embed
         """
-        embed = self.formatter.error_embed(title, description, **kwargs)
-        await inter.edit_original_response(embed=embed)
-        logger.warning(log_message)
+        await self.response_handler.send_error(
+            inter, title, description, log_message=log_message, **kwargs
+        )
 
     async def check_user_registered(
         self,

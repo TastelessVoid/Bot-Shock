@@ -4,6 +4,7 @@ Complete reference for all Bot Shock commands. All commands use Discord's slash 
 
 ## Table of Contents
 - [User Registration](#user-registration)
+- [Device Status](#device-status)
 - [Controller Management](#controller-management)
 - [Shocking Commands](#shocking-commands)
 - [Reminders (Scheduled Shocks)](#reminders-scheduled-shocks)
@@ -84,6 +85,45 @@ This is usually done automatically during setup, but you can add more shockers l
 
 ---
 
+## Device Status
+
+Manage whether you're wearing your device. When your device status is set to "not wearing", controllers cannot send shock commands to you.
+
+### `/openshock device_status`
+**Description:** Toggle whether you're wearing your device.
+
+When your device status is set to "not wearing", controllers cannot send shock commands to you. They will receive an error message instead.
+
+**Parameters:** None
+
+**Example:**
+```
+/openshock device_status
+→ Status updated
+
+If wearing: "You are now **✅ Wearing** your device."
+If not wearing: "You are now **❌ Not Wearing** your device."
+```
+
+---
+
+### `/openshock check_device`
+**Description:** Check if you're currently wearing your device.
+
+Shows your current device status and provides a quick link to toggle it.
+
+**Parameters:** None
+
+**Example:**
+```
+/openshock check_device
+→ Current Status: ✅ **Wearing**
+→ Shows option to toggle status
+```
+```
+
+---
+
 ## Controller Management
 
 Controllers are users or roles who have permission to control your devices. You explicitly grant them access. They can 
@@ -148,6 +188,11 @@ Shows:
 ### `/shock`
 **Description:** Send a shock/vibrate/sound command to a user's device.
 
+**Requirements:**
+- Target user must be wearing their device (see `/openshock check_device`)
+- You must have permission to control the target user
+- Target user must have at least one shocker registered
+
 **Parameters:**
 - `user` (optional): Target user (auto-selected if you control only one person)
 - `intensity` (optional): 1-100, default uses your preferences
@@ -157,6 +202,11 @@ Shows:
 
 **Smart Defaults:**
 The bot remembers your last-used settings and applies them automatically. See [Preferences](#preferences) to configure defaults.
+
+**Error Messages:**
+- `"User is not wearing their device right now!"` - Target disabled their device status
+- `"No permission to control this user"` - No controller permission granted
+- `"User has no shockers registered"` - Target needs to add devices
 
 **Examples:**
 ```

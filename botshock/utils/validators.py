@@ -172,6 +172,12 @@ class ShockValidator:
         target_user = await self.db.get_user(target.id, guild_id)
         shockers = await self.db.get_shockers(target.id, guild_id)
 
+        # Check if device is worn
+        device_worn = await self.db.get_device_worn_status(target.id, guild_id)
+        if not device_worn:
+            target_label = getattr(target, "mention", f"User ID {target.id}")
+            return False, f"User {target_label} is not wearing their device right now!", None, None
+
         # Select shocker
         if shocker_id:
             target_shocker = next((s for s in shockers if s["shocker_id"] == shocker_id), None)

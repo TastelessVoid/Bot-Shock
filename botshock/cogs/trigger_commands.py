@@ -8,6 +8,7 @@ import disnake
 from disnake.ext import commands
 
 from botshock.core.bot_protocol import SupportsBotAttrs
+from botshock.utils.decorators import defer_response
 from botshock.utils.validators import TriggerValidator
 
 logger = logging.getLogger("BotShock.TriggerCommands")
@@ -52,7 +53,12 @@ class TriggerCommands(commands.Cog):
         """Base command for trigger management"""
         pass
 
-    @trigger.sub_command(description="Add a regex trigger")
+    @trigger.sub_command_group(name="manage", description="Create, remove, and manage triggers")
+    async def manage_group(self, inter: disnake.ApplicationCommandInteraction):
+        """Manage your triggers"""
+        pass
+
+    @manage_group.sub_command(description="Add a regex trigger")
     async def add(
         self,
         inter: disnake.ApplicationCommandInteraction,
@@ -76,19 +82,16 @@ class TriggerCommands(commands.Cog):
         target_user = self.bot.command_helper.resolve_target_user(user, inter.author)
         is_for_self = target_user == inter.author
 
-        # Permission check first
         if not await self.bot.command_helper.check_permission_with_logging(
             inter, inter.author, target_user, "add trigger"
         ):
             return
 
-        # Show modal
         modal = AddTriggerModal(
             for_user=target_user.display_name if not is_for_self else "yourself"
         )
         await inter.response.send_modal(modal)
 
-        # Wait for modal submission
         try:
             modal_inter: disnake.ModalInteraction = await self.bot.wait_for(
                 "modal_submit",
@@ -202,9 +205,10 @@ class TriggerCommands(commands.Cog):
             embed = self.formatter.error_embed(
                 "Database Error", "Failed to add trigger. Please try again."
             )
-            await modal_inter.edit_original_response(embed=embed)
+            await inter.edit_original_response(embed=embed)
 
-    @trigger.sub_command(description="Remove a trigger")
+    @manage_group.sub_command(description="List your triggers")
+    async def list(
     async def remove(
         self,
         inter: disnake.ApplicationCommandInteraction,
@@ -214,7 +218,6 @@ class TriggerCommands(commands.Cog):
         ),
     ):
         """Remove a trigger"""
-        await inter.response.defer(ephemeral=True)
 
         target_user = self.bot.command_helper.resolve_target_user(user, inter.author)
 
@@ -247,6 +250,7 @@ class TriggerCommands(commands.Cog):
             await inter.edit_original_response(embed=embed)
 
     @trigger.sub_command(description="Toggle a trigger on/off")
+    @defer_response(ephemeral=True)
     async def toggle(
         self,
         inter: disnake.ApplicationCommandInteraction,
@@ -257,7 +261,6 @@ class TriggerCommands(commands.Cog):
         ),
     ):
         """Toggle a trigger on or off"""
-        await inter.response.defer(ephemeral=True)
 
         target_user = self.bot.command_helper.resolve_target_user(user, inter.author)
 
@@ -292,7 +295,8 @@ class TriggerCommands(commands.Cog):
             )
             await inter.edit_original_response(embed=embed)
 
-    @trigger.sub_command(description="List triggers")
+    @trigger.sub_command(description="List all triggers")
+    @defer_response(ephemeral=False)
     async def list(
         self,
         inter: disnake.ApplicationCommandInteraction,
@@ -301,11 +305,9 @@ class TriggerCommands(commands.Cog):
         ),
     ):
         """List all triggers for a user"""
-        await inter.response.defer()
 
         target_user = self.bot.command_helper.resolve_target_user(user, inter.author)
 
-        # Permission check for viewing other users' triggers
         if target_user != inter.author and not await self.bot.command_helper.check_permission_with_logging(
             inter, inter.author, target_user, "list triggers"
         ):

@@ -169,6 +169,7 @@ class Database:
                     discord_username TEXT NOT NULL,
                     openshock_api_token TEXT NOT NULL,
                     api_server TEXT,
+                    device_worn BOOLEAN NOT NULL DEFAULT 1,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(discord_id, guild_id),
@@ -176,6 +177,21 @@ class Database:
                 )
             """
             )
+
+            # Migration: Add device_worn column if it doesn't exist (for existing databases)
+            cursor.execute(
+                """
+                PRAGMA table_info(users)
+                """
+            )
+            columns = [column[1] for column in cursor.fetchall()]
+            if "device_worn" not in columns:
+                cursor.execute(
+                    """
+                    ALTER TABLE users ADD COLUMN device_worn BOOLEAN NOT NULL DEFAULT 1
+                    """
+                )
+                logger.info("Migration: Added device_worn column to users table")
 
             # Create shockers table - now linked to user-guild pair
             cursor.execute(
@@ -429,6 +445,7 @@ class Database:
                     discord_username TEXT NOT NULL,
                     openshock_api_token TEXT NOT NULL,
                     api_server TEXT,
+                    device_worn BOOLEAN NOT NULL DEFAULT 1,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(discord_id, guild_id),
@@ -436,6 +453,17 @@ class Database:
                 )
                 """
             )
+            # Migration: Add device_worn column if it doesn't exist (for existing databases)
+            try:
+                await cursor.execute("PRAGMA table_info(users)")
+                columns = [row[1] for row in await cursor.fetchall()]
+                if "device_worn" not in columns:
+                    await cursor.execute(
+                        "ALTER TABLE users ADD COLUMN device_worn BOOLEAN NOT NULL DEFAULT 1"
+                    )
+                    logger.info("Migration: Added device_worn column to users table")
+            except Exception as e:
+                logger.warning(f"Migration check for device_worn column failed (may already exist): {e}")
             # Shockers table
             await cursor.execute(
                 """
@@ -2114,12 +2142,10 @@ class Database:
     async def get_controllable_users(
         self, controller_discord_id: int, guild_id: int, controller_role_ids: list[int] = None
     ) -> list[int]:
-        """Get list of user IDs that this controller has permission to control"""
+        """Get list of Discord IDs that a controller can control in a guild"""
         try:
             async with self.get_connection() as conn:
                 cursor = await conn.cursor()
-
-                # Get all users in the guild
                 await cursor.execute(
                     """
                     SELECT DISTINCT u.discord_id
@@ -2140,3 +2166,44 @@ class Database:
         except Exception as e:
             logger.error(f"Failed to get controllable users: {e}")
             return []
+
+    async def get_device_worn_status(self, discord_id: int, guild_id: int) -> bool:
+        """Get whether a user's device is worn"""
+        try:
+            async with self.get_connection() as conn:
+                cursor = await conn.cursor()
+                await cursor.execute(
+                    """
+                    SELECT device_worn FROM users WHERE discord_id = ? AND guild_id = ?
+                """,
+                    (discord_id, guild_id),
+                )
+                row = await cursor.fetchone()
+                if row:
+                    # SQLite stores booleans as 0 or 1
+                    return bool(row["device_worn"])
+                return True  # Default to worn if user not found
+        except Exception as e:
+            logger.error(f"Failed to get device_worn status for user {discord_id}: {e}")
+            return True  # Default to worn on error
+
+    async def set_device_worn(self, discord_id: int, guild_id: int, is_worn: bool) -> bool:
+        """Update whether a user's device is worn"""
+        try:
+            async with self.get_connection() as conn:
+                cursor = await conn.cursor()
+                await cursor.execute(
+                    """
+                    UPDATE users SET device_worn = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE discord_id = ? AND guild_id = ?
+                """,
+                    (1 if is_worn else 0, discord_id, guild_id),
+                )
+                if cursor.rowcount > 0:
+                    logger.info(f"Updated device_worn to {is_worn} for user {discord_id} in guild {guild_id}")
+                    return True
+                return False
+        except Exception as e:
+            logger.error(f"Failed to set device_worn status for user {discord_id}: {e}")
+            return False
+

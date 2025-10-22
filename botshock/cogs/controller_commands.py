@@ -8,6 +8,7 @@ import disnake
 from disnake.ext import commands
 
 from botshock.core.bot_protocol import SupportsBotAttrs
+from botshock.utils.decorators import defer_response, require_registration
 from botshock.utils.views import AuthorOnlyView
 
 logger = logging.getLogger("BotShock.ControllerCommands")
@@ -19,24 +20,24 @@ class ControllerCommands(commands.Cog):
     def __init__(self, bot: SupportsBotAttrs):
         self.bot = bot
         self.db = bot.db
-        self.formatter = bot.formatter  # Use shared formatter
-        self.helper = bot.command_helper  # Use shared command helper
+        self.formatter = bot.formatter
+        self.helper = bot.command_helper
 
     @commands.slash_command(description="Manage who can control your OpenShock device")
     async def controllers(self, inter: disnake.ApplicationCommandInteraction):
         """Base command for controller management"""
         pass
 
-    @controllers.sub_command(description="Add a user or role that can control your device")
+    @controllers.sub_command_group(name="manage", description="Add, remove, or view controllers")
+    async def manage_controllers(self, inter: disnake.ApplicationCommandInteraction):
+        """Manage your device controllers"""
+        pass
+
+    @manage_controllers.sub_command(description="Add a user or role that can control your device")
+    @defer_response(ephemeral=True)
+    @require_registration(attr_name="db")
     async def add(self, inter: disnake.ApplicationCommandInteraction):
         """Add a controller (user or role) who can control your device"""
-        await self.helper.defer_response(inter)
-
-        # Validate that user is registered using helper
-        if not await self.helper.require_user_registered(inter, inter.author.id, inter.guild.id):
-            return
-
-        # Show streamlined selection view with both selectors
         embed = disnake.Embed(
             title="🎮 Add Controllers",
             description="Select users and/or roles you want to grant control permissions to.",
@@ -63,7 +64,9 @@ class ControllerCommands(commands.Cog):
         view = StreamlinedControllerSelectView(self.bot, self.db, self.formatter, inter.author)
         await inter.edit_original_response(embed=embed, view=view)
 
-    @controllers.sub_command(description="Remove a user or role from controlling your device")
+    @manage_controllers.sub_command(description="Remove a user or role from controlling your device")
+    @defer_response(ephemeral=True)
+    @require_registration(attr_name="db")
     async def remove(
         self,
         inter: disnake.ApplicationCommandInteraction,
@@ -75,13 +78,7 @@ class ControllerCommands(commands.Cog):
         ),
     ):
         """Remove a controller's permission to control your device"""
-        await self.helper.defer_response(inter)
 
-        # Validate that user is registered
-        if not await self.helper.require_user_registered(inter, inter.author.id, inter.guild.id):
-            return
-
-        # Validate that exactly one is provided
         if (user is None) == (role is None):
             embed = self.formatter.error_embed(
                 "Invalid Input",
@@ -90,7 +87,6 @@ class ControllerCommands(commands.Cog):
             await inter.edit_original_response(embed=embed)
             return
 
-        # Remove the controller permission
         if user:
             success = await self.db.remove_controller_permission(
                 sub_discord_id=inter.author.id,
@@ -124,26 +120,19 @@ class ControllerCommands(commands.Cog):
             )
             await inter.edit_original_response(embed=embed)
 
-    @controllers.sub_command(description="List all users and roles that can control your device")
+    @manage_controllers.sub_command(description="List all users and roles that can control your device")
+    @defer_response(ephemeral=True)
+    @require_registration(attr_name="db")
     async def list(self, inter: disnake.ApplicationCommandInteraction):
         """List all controllers who have permission to control your device"""
-        await self.helper.defer_response(inter)
-
-        # Validate that user is registered using helper
-        if not await self.helper.require_user_registered(inter, inter.author.id, inter.guild.id):
-            return
-
-        # Get controller permissions
         permissions = await self.db.get_controller_permissions(inter.author.id, inter.guild.id)
 
-        # Build embed
         embed = disnake.Embed(
             title="🎮 Your Device Controllers",
             description="These users and roles have permission to control your device:",
             color=disnake.Color.blue(),
         )
 
-        # Add users
         if permissions["users"]:
             user_list = []
             for user_id in permissions["users"]:
@@ -159,7 +148,6 @@ class ControllerCommands(commands.Cog):
                 name="👥 Authorized Users", value="*No individual users authorized*", inline=False
             )
 
-        # Add roles
         if permissions["roles"]:
             role_list = []
             for role_id in permissions["roles"]:
@@ -196,16 +184,11 @@ class ControllerCommands(commands.Cog):
 
         await inter.edit_original_response(embed=embed)
 
-    @controllers.sub_command(description="Remove ALL controller permissions (revoke all access)")
+    @manage_controllers.sub_command(description="Remove ALL controller permissions (revoke all access)")
+    @defer_response(ephemeral=True)
+    @require_registration(attr_name="db")
     async def clear(self, inter: disnake.ApplicationCommandInteraction):
         """Clear all controller permissions - revoke all access to your device"""
-        await self.helper.defer_response(inter)
-
-        # Validate that user is registered
-        if not await self.helper.require_user_registered(inter, inter.author.id, inter.guild.id):
-            return
-
-        # Get current permissions to show what will be cleared
         permissions = await self.db.get_controller_permissions(inter.author.id, inter.guild.id)
         total = len(permissions["users"]) + len(permissions["roles"])
 
@@ -217,7 +200,6 @@ class ControllerCommands(commands.Cog):
             await inter.edit_original_response(embed=embed)
             return
 
-        # Create confirmation view
         view = ConfirmClearView()
         embed = disnake.Embed(
             title="⚠️ Confirm Clear All Controllers",
@@ -237,14 +219,12 @@ class ControllerCommands(commands.Cog):
 
         await inter.edit_original_response(embed=embed, view=view)
 
-        # Retrieve the message we just edited to use in interaction checks
         try:
             original_msg = await inter.original_message()
             original_msg_id = original_msg.id
         except Exception:
             original_msg_id = None
 
-        # Wait for confirmation
         def check_button(i):
             return i.author.id == inter.author.id and (
                 original_msg_id is None
@@ -256,7 +236,6 @@ class ControllerCommands(commands.Cog):
             await button_inter.response.defer()
 
             if button_inter.component.custom_id == "confirm_clear":
-                # Clear all permissions
                 success = await self.db.clear_all_controller_permissions(
                     inter.author.id, inter.guild.id
                 )
@@ -292,7 +271,14 @@ class ControllerCommands(commands.Cog):
             )
             await inter.edit_original_response(embed=embed, view=None)
 
-    @controllers.sub_command(description="Set cooldown duration for controllers")
+    @controllers.sub_command_group(name="settings", description="Configure cooldowns and other settings")
+    async def settings_group(self, inter: disnake.ApplicationCommandInteraction):
+        """Manage controller and device settings"""
+        pass
+
+    @settings_group.sub_command(description="Set cooldown duration for controllers")
+    @defer_response(ephemeral=True)
+    @require_registration(attr_name="db")
     async def cooldown(
         self,
         inter: disnake.ApplicationCommandInteraction,
@@ -301,26 +287,9 @@ class ControllerCommands(commands.Cog):
         ),
     ):
         """Set how long controllers must wait between actions"""
-        await inter.response.defer(ephemeral=True)
 
-        # Validate that user is registered
-        target_user = await self.db.get_user(inter.author.id, inter.guild.id)
-        if not target_user:
-            embed = self.formatter.error_embed(
-                "Not Registered",
-                "You need to register your device first!",
-                field_1=(
-                    "Next Steps",
-                    "Use `/openshock setup` to set up your API token and device.",
-                ),
-            )
-            await inter.edit_original_response(embed=embed)
-            return
-
-        # Convert minutes to seconds
         cooldown_seconds = minutes * 60
 
-        # Set the cooldown duration
         success = await self.db.set_controller_cooldown_duration(
             inter.author.id, inter.guild.id, cooldown_seconds
         )
@@ -349,30 +318,80 @@ class ControllerCommands(commands.Cog):
             )
             await inter.edit_original_response(embed=embed)
 
-    @controllers.sub_command(
-        description="🚨 EMERGENCY: Immediately halt ALL control and scheduled actions"
-    )
-    async def safeword(self, inter: disnake.ApplicationCommandInteraction):
-        """Emergency safeword - immediately stops all control, reminders, and triggers"""
-        await inter.response.defer(ephemeral=True)
+    @settings_group.sub_command(description="Set device-wide cooldown (owner only)")
+    @defer_response(ephemeral=True)
+    @require_registration(attr_name="db")
+    async def device_cooldown(
+        self,
+        inter: disnake.ApplicationCommandInteraction,
+        minutes: int = commands.Param(
+            description="Device cooldown duration in minutes (1-60)", ge=1, le=60, default=5
+        ),
+    ):
+        """Set global cooldown for all device access (owner/primary user only)"""
+        is_owner = await self.db.is_device_owner(inter.author.id, inter.guild.id)
 
-        # Check if user is registered
-        sub_user = await self.db.get_user(inter.author.id, inter.guild.id)
-        if not sub_user:
+        if not is_owner:
             embed = self.formatter.error_embed(
-                "Not Registered",
-                "You don't have any registered devices.",
-                field_1=("Note", "The safeword command is only for registered users."),
+                "Owner Only",
+                "Only the device owner can set the device-wide cooldown.",
+                field_1=(
+                    "About This Setting",
+                    "The device cooldown is a global limit that applies to all actions on the device, "
+                    "including your own. This is different from the controller cooldown which only "
+                    "limits controllers between their own actions."
+                ),
             )
             await inter.edit_original_response(embed=embed)
             return
 
-        # Track what was stopped
+        cooldown_seconds = minutes * 60
+
+        success = await self.db.set_device_cooldown_duration(
+            inter.author.id, inter.guild.id, cooldown_seconds
+        )
+
+        if success:
+            logger.info(
+                f"Device cooldown set: {inter.author} ({inter.author.id}) set device cooldown to "
+                f"{minutes} minute(s) in guild {inter.guild.id}"
+            )
+            embed = self.formatter.success_embed(
+                "✅ Device Cooldown Updated",
+                f"The device must now wait **{minutes} minute(s)** between any actions.",
+                field_1=(
+                    "What This Means",
+                    f"• After any action (by you or controllers), the device waits {minutes} minute(s)\n"
+                    f"• This applies globally to all device commands\n"
+                    f"• Controllers still have their own individual cooldown\n"
+                    f"• You can change this anytime with `/controllers device_cooldown`"
+                ),
+            )
+            await inter.edit_original_response(embed=embed)
+        else:
+            embed = self.formatter.error_embed(
+                "Failed to Update Device Cooldown",
+                "There was an error updating the device cooldown. Please try again.",
+            )
+            await inter.edit_original_response(embed=embed)
+
+    @controllers.sub_command_group(name="emergency", description="Emergency safety controls")
+    async def emergency_group(self, inter: disnake.ApplicationCommandInteraction):
+        """Emergency and safety controls"""
+        pass
+
+    @emergency_group.sub_command(
+        description="🚨 EMERGENCY: Immediately halt ALL control and scheduled actions"
+    )
+    @defer_response(ephemeral=True)
+    @require_registration(attr_name="db")
+    async def safeword(self, inter: disnake.ApplicationCommandInteraction):
+        """Emergency safeword - immediately stops all control, reminders, and triggers"""
+
         stopped_items = []
         error_items = []
 
         try:
-            # 1. Revoke ALL controller permissions
             permissions = await self.db.get_controller_permissions(inter.author.id, inter.guild.id)
             total_controllers = len(permissions["users"]) + len(permissions["roles"])
 
@@ -388,7 +407,6 @@ class ControllerCommands(commands.Cog):
             else:
                 stopped_items.append("ℹ️ No active controller permissions")
 
-            # 2. Delete ALL pending reminders targeting this user
             reminders = await self.db.get_reminders_for_user(
                 inter.guild.id, inter.author.id, include_completed=False
             )
@@ -407,7 +425,6 @@ class ControllerCommands(commands.Cog):
             else:
                 stopped_items.append("ℹ️ No pending reminders")
 
-            # 3. Disable ALL triggers for this user
             triggers = await self.db.get_triggers(
                 inter.author.id, inter.guild.id, enabled_only=True
             )
@@ -426,13 +443,11 @@ class ControllerCommands(commands.Cog):
                     f"trigger(s) in guild {inter.guild.id}"
                 )
 
-                # Reload trigger manager for this guild to stop processing them immediately
                 if hasattr(self.bot, "trigger_manager"):
                     await self.bot.trigger_manager.reload_guild(inter.guild.id)
             else:
                 stopped_items.append("ℹ️ No active triggers")
 
-            # Build response embed
             if error_items:
                 embed_color = disnake.Color.orange()
                 title = "⚠️ Safeword Activated (With Warnings)"
@@ -450,16 +465,13 @@ class ControllerCommands(commands.Cog):
                 timestamp=disnake.utils.utcnow(),
             )
 
-            # Add what was stopped
             stopped_text = "\n".join(stopped_items)
             embed.add_field(name="🛑 Actions Taken", value=stopped_text, inline=False)
 
-            # Add errors if any
             if error_items:
                 error_text = "\n".join(error_items)
                 embed.add_field(name="⚠️ Warnings", value=error_text, inline=False)
 
-            # Add next steps
             embed.add_field(
                 name="📋 Next Steps",
                 value=(
@@ -476,7 +488,6 @@ class ControllerCommands(commands.Cog):
 
             await inter.edit_original_response(embed=embed)
 
-            # Also log prominently
             logger.critical(
                 f"🚨 SAFEWORD ACTIVATED 🚨 User: {inter.author} ({inter.author.id}) | "
                 f"Guild: {inter.guild.name} ({inter.guild.id}) | "
@@ -547,11 +558,7 @@ class StreamlinedControllerSelectView(AuthorOnlyView):
     ):
         """Handle user selection"""
         await inter.response.defer()
-
-        # Filter out the author
         self.selected_users = [u for u in select.values if u.id != self.author.id]
-
-        # Update the message to show what's been selected
         await self._update_selection_display(inter)
 
     @disnake.ui.role_select(
@@ -562,10 +569,7 @@ class StreamlinedControllerSelectView(AuthorOnlyView):
     ):
         """Handle role selection"""
         await inter.response.defer()
-
         self.selected_roles = select.values
-
-        # Update the message to show what's been selected
         await self._update_selection_display(inter)
 
     @disnake.ui.button(label="Continue", style=disnake.ButtonStyle.success, row=2)
@@ -573,7 +577,6 @@ class StreamlinedControllerSelectView(AuthorOnlyView):
         """Handle continue button"""
         await inter.response.defer()
 
-        # Validate that at least one controller was selected
         if not self.selected_users and not self.selected_roles:
             embed = self.formatter.error_embed(
                 "No Selection", "Please select at least one user or role before continuing."
@@ -581,7 +584,6 @@ class StreamlinedControllerSelectView(AuthorOnlyView):
             await inter.edit_original_message(embed=embed, view=None)
             return
 
-        # Show confirmation screen
         await self._show_confirmation(inter)
 
     @disnake.ui.button(label="Cancel", style=disnake.ButtonStyle.secondary, row=2)
@@ -600,7 +602,6 @@ class StreamlinedControllerSelectView(AuthorOnlyView):
             color=disnake.Color.blue(),
         )
 
-        # Show current selections
         if self.selected_users:
             user_list = ", ".join([u.mention for u in self.selected_users])
             embed.add_field(
@@ -730,13 +731,10 @@ class ConfirmMultipleControllersView(disnake.ui.View):
         added_count = 0
         failed_count = 0
         added_names = []
-        dm_failed = []  # Track users who couldn't receive DMs
+        dm_failed = []
 
-        # Add each controller
         for controller_obj in self.controller_objs:
-            # Determine if it's a user or role
             if isinstance(controller_obj, (disnake.User, disnake.Member)):
-                # It's a user
                 success = await self.db.add_controller_permission(
                     sub_discord_id=self.author.id,
                     guild_id=inter.guild.id,
@@ -785,7 +783,6 @@ class ConfirmMultipleControllersView(disnake.ui.View):
                             f"Failed to send DM to controller {controller_obj} ({controller_obj.id}): {e}"
                         )
             else:
-                # It's a role
                 success = await self.db.add_controller_permission(
                     sub_discord_id=self.author.id,
                     guild_id=inter.guild.id,
@@ -803,7 +800,6 @@ class ConfirmMultipleControllersView(disnake.ui.View):
             else:
                 failed_count += 1
 
-        # Build response
         if added_count > 0:
             embed = self.formatter.success_embed(
                 f"✅ Controllers Added ({added_count})",
@@ -832,7 +828,6 @@ class ConfirmMultipleControllersView(disnake.ui.View):
                     inline=False,
                 )
 
-            # Add notification about DM failures
             if dm_failed:
                 dm_failed_text = ", ".join(dm_failed) if len(dm_failed) <= 5 else f"{', '.join(dm_failed[:5])}, and {len(dm_failed) - 5} more"
                 embed.add_field(

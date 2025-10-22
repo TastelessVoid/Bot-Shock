@@ -60,6 +60,29 @@ The bot will show you a list of shockers from your OpenShock account. Select the
 
 **Done!** You're now registered and ready to use BotShock.
 
+### Managing Your Device Status
+
+By default, the bot assumes you're wearing your device. If you need to remove it temporarily, you can update your status:
+
+```
+/openshock device_status
+```
+
+This toggles between:
+- **✅ Wearing** - Controllers can send shocks to you
+- **❌ Not Wearing** - Controllers cannot send shocks (will get an error)
+
+**Use cases:**
+- Taking off the device for showering or sleeping
+- Temporarily unavailable for play
+- Quick safety measure without removing permissions
+
+You can toggle this as often as needed. Check your current status anytime:
+
+```
+/openshock check_device
+```
+
 ---
 
 ## Basic Usage
@@ -430,38 +453,46 @@ Logs provide:
 - [ ] Check active reminders
 - [ ] Review active triggers
 - [ ] Look at action logs for unusual activity
+- [ ] Verify device status is correct
 - [ ] Test emergency procedures
 
 ### Emergency Procedures
 
 **If something goes wrong:**
 
-1. **Disable triggers immediately:**
+1. **Disable device status immediately:**
+   ```
+   /openshock device_status
+   ```
+   This prevents any shocks from being sent.
+
+2. **Disable triggers immediately:**
    ```
    /trigger toggle trigger_id:X enabled:False
    ```
 
-2. **Cancel active reminders:**
+3. **Cancel active reminders:**
    ```
    /remind cancel reminder_id:X
    ```
 
-3. **Remove controller access:**
+4. **Remove controller access:**
    ```
    /controllers remove user:@Person
    ```
 
-4. **Complete removal (nuclear option):**
+5. **Complete removal (nuclear option):**
    ```
    /openshock unregister
    ```
 
-5. **Physical device control:**
+6. **Physical device control:**
    - Power off the device
    - Use OpenShock app for manual control
    - Remove device if needed
 
 **Always have:**
+- Device status available as a quick safety measure
 - Safeword/signal outside the bot
 - OpenShock app installed on your phone
 - Easy access to device power

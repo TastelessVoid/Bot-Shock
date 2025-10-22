@@ -9,6 +9,7 @@ import disnake
 from disnake.ext import commands
 
 from botshock.core.bot_protocol import SupportsBotAttrs
+from botshock.utils.decorators import defer_response
 from botshock.utils.recurrence import RecurrencePattern
 from botshock.utils.time_parser import TimeParser
 from botshock.utils.validators import ReminderValidator
@@ -129,6 +130,11 @@ class ReminderCommands(commands.Cog):
         """Base command for reminder management"""
         pass
 
+    @remind.sub_command_group(name="manage", description="Create, cancel, and view reminders")
+    async def manage_group(self, inter: disnake.ApplicationCommandInteraction):
+        """Manage your reminders"""
+        pass
+
     async def time_autocomplete(
         self, inter: disnake.ApplicationCommandInteraction, user_input: str
     ):
@@ -152,7 +158,8 @@ class ReminderCommands(commands.Cog):
         filtered = [ex for ex in examples if user_input.lower() in ex.lower()]
         return filtered[:25] if filtered else examples[:25]
 
-    @remind.sub_command(description="Set a reminder to shock a user at a specific time")
+    @manage_group.sub_command(description="Set a reminder to shock a user at a specific time")
+    @defer_response(ephemeral=True)
     async def set(
         self,
         inter: disnake.ApplicationCommandInteraction,
@@ -180,13 +187,9 @@ class ReminderCommands(commands.Cog):
         ),
     ):
         """Set a reminder to shock a user at a specific time (with optional recurrence)"""
-        await inter.response.defer(ephemeral=True)
-
-        # Default to self if no user specified
         if user is None:
             user = inter.author
 
-        # Validate reminder creation
         is_valid, error_msg = await self.validator.validate_reminder_creation(
             inter.author, user, inter.guild.id
         )
@@ -306,16 +309,15 @@ class ReminderCommands(commands.Cog):
             )
             await inter.edit_original_response(embed=embed)
 
-    @remind.sub_command(description="Cancel a scheduled reminder")
+    @manage_group.sub_command(description="Cancel a scheduled reminder")
+    @defer_response(ephemeral=True)
     async def cancel(
         self,
         inter: disnake.ApplicationCommandInteraction,
         reminder_id: int = commands.Param(description="The reminder ID to cancel"),
     ):
         """Cancel a scheduled reminder"""
-        await inter.response.defer(ephemeral=True)
 
-        # Get reminder to check permissions (asynchronous DB call)
         reminder = await self.db.get_reminder(reminder_id, inter.guild.id)
 
         if not reminder:
@@ -323,7 +325,6 @@ class ReminderCommands(commands.Cog):
             await inter.edit_original_response(embed=embed)
             return
 
-        # Check if user can cancel (creator or has control permissions)
         can_cancel = (
             reminder["creator_discord_id"] == inter.author.id
             or inter.author.guild_permissions.administrator
@@ -353,8 +354,9 @@ class ReminderCommands(commands.Cog):
             )
             await inter.edit_original_response(embed=embed)
 
-    @remind.sub_command(description="List your scheduled reminders")
-    async def list(
+    @manage_group.sub_command(description="List your scheduled reminders")
+    @defer_response(ephemeral=True)
+    async def list(self, inter: disnake.ApplicationCommandInteraction):
         self,
         inter: disnake.ApplicationCommandInteraction,
         user: disnake.User = commands.Param(
@@ -363,11 +365,9 @@ class ReminderCommands(commands.Cog):
         page: int = commands.Param(description="Page number to display", default=1, ge=1),
     ):
         """List scheduled reminders"""
-        await inter.response.defer(ephemeral=True)
 
         target_user = user if user else inter.author
 
-        # Permission check for viewing other users
         if target_user != inter.author:
             can_manage, reason = await self.permission_checker.can_manage_user(
                 inter.author, target_user
@@ -382,14 +382,12 @@ class ReminderCommands(commands.Cog):
 
         reminders = await self.db.get_reminders_for_user(inter.guild.id, target_user.id)
 
-        # Paginate reminders
         items_per_page = 5
         total_reminders = len(reminders)
         total_pages = (total_reminders // items_per_page) + (
             1 if total_reminders % items_per_page > 0 else 0
         )
 
-        # Adjust requested page if out of bounds
         if total_pages == 0:
             total_pages = 1
         if page > total_pages:
@@ -397,8 +395,7 @@ class ReminderCommands(commands.Cog):
         if page < 1:
             page = 1
 
-        # Slice reminders for the requested page
-        start = (page - 1) * items_per_page
+        page_reminders = reminders[(page - 1) * items_per_page : page * items_per_page]
         end = start + items_per_page
         paginated_reminders = reminders[start:end]
 

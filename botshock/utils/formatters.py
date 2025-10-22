@@ -21,17 +21,48 @@ class ResponseFormatter:
     def _make_embed(
         prefix: str, title: str, description: str, color: int, **kwargs
     ) -> disnake.Embed:
-        """Internal helper to build consistent embeds with optional fields"""
+        """Internal helper to build consistent embeds with optional fields
+
+        Supports two field formats for clarity:
+        1. field_N=(name, value) - legacy format, still works
+        2. fields=[(name, value), ...] - modern list format
+        """
         embed = disnake.Embed(
             title=f"{prefix} {title}",
             description=description,
             color=color,
             timestamp=datetime.now(),
         )
+
+        # Handle new 'fields' parameter for list of tuples
+        if "fields" in kwargs:
+            for name, value in kwargs.pop("fields"):
+                embed.add_field(name=name, value=value, inline=False)
+
+        # Handle legacy field_N format
         for key, value in kwargs.items():
             if key.startswith("field_") and isinstance(value, (list, tuple)) and len(value) == 2:
                 name, val = value
                 embed.add_field(name=name, value=val, inline=False)
+        return embed
+
+    @staticmethod
+    def add_fields(
+        embed: disnake.Embed, fields: list[tuple[str, str]], inline: bool = False
+    ) -> disnake.Embed:
+        """
+        Add multiple fields to an embed at once.
+
+        Args:
+            embed: The embed to add fields to
+            fields: List of (name, value) tuples
+            inline: Whether fields should be inline
+
+        Returns:
+            The modified embed
+        """
+        for name, value in fields:
+            embed.add_field(name=name, value=value, inline=inline)
         return embed
 
     @staticmethod

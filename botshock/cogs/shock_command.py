@@ -8,6 +8,7 @@ import disnake
 from disnake.ext import commands
 
 from botshock.core.bot_protocol import SupportsBotAttrs
+from botshock.utils.decorators import defer_response
 from botshock.utils.validators import ShockValidator
 
 logger = logging.getLogger("BotShock.ShockCommand")
@@ -25,6 +26,7 @@ class ShockCommand(commands.Cog):
         self.helper = bot.command_helper  # Use shared command helper
 
     @commands.slash_command(description="Send a shock command to a user's OpenShock device")
+    @defer_response(ephemeral=True)
     async def shock(
         self,
         inter: disnake.ApplicationCommandInteraction,
@@ -44,14 +46,10 @@ class ShockCommand(commands.Cog):
     ):
         """Send a shock command to a user's OpenShock device with smart defaults"""
 
-        await inter.response.defer(ephemeral=True)
-
-        # Get controller's role IDs for permission checking
         controller_role_ids = (
             [role.id for role in inter.author.roles] if hasattr(inter.author, "roles") else []
         )
 
-        # Smart defaults: auto-select target user if controller only controls one person
         if user is None:
             controllable_users = await self.db.get_controllable_users(
                 inter.author.id, inter.guild.id, controller_role_ids
@@ -69,13 +67,11 @@ class ShockCommand(commands.Cog):
                 await inter.edit_original_response(embed=embed)
                 return
             elif len(controllable_users) == 1:
-                # Auto-select the only controllable user
                 user = await inter.bot.fetch_user(controllable_users[0])
                 logger.info(
                     f"Auto-selected target user {user.name} for controller {inter.author.name}"
                 )
             else:
-                # Multiple users - need to specify
                 embed = self.formatter.error_embed(
                     "Target Required",
                     f"You can control {len(controllable_users)} users. Please specify which one:",
@@ -84,12 +80,9 @@ class ShockCommand(commands.Cog):
                 await inter.edit_original_response(embed=embed)
                 return
 
-        # Get or create preferences for smart defaults
         prefs = await self.db.get_controller_preferences(inter.author.id, inter.guild.id, user.id)
 
-        # Apply smart defaults for missing parameters
         if prefs and prefs.get("use_smart_defaults"):
-            # Use last-used values if available, otherwise configured defaults
             if intensity is None:
                 intensity = prefs.get("last_used_intensity") or prefs.get("default_intensity") or 30
             if duration is None:
@@ -99,7 +92,6 @@ class ShockCommand(commands.Cog):
                     prefs.get("last_used_shock_type") or prefs.get("default_shock_type") or "Shock"
                 )
         else:
-            # Use hardcoded defaults if no preferences or smart defaults disabled
             if intensity is None:
                 intensity = 30
             if duration is None:
@@ -113,7 +105,6 @@ class ShockCommand(commands.Cog):
             f"Intensity: {intensity}% | Duration: {duration}ms | Smart defaults: {prefs is not None}"
         )
 
-        # Validate shock request
         is_valid, error_msg, target_user, target_shocker = (
             await self.validator.validate_shock_request(
                 inter.author, user, inter.guild.id, shocker_id
@@ -129,7 +120,6 @@ class ShockCommand(commands.Cog):
             )
             return
 
-        # If no specific shocker provided and user has multiple, delegate selection to helper
         if not shocker_id:
             user_shockers = await self.db.get_shockers(user.id, inter.guild.id)
             if len(user_shockers) > 1:
@@ -141,7 +131,6 @@ class ShockCommand(commands.Cog):
                 if not target_shocker:
                     return
 
-        # Check global device cooldown (60 seconds default)
         device_ready = await self.db.check_shocker_cooldown(
             user.id, inter.guild.id, target_shocker["shocker_id"], cooldown_seconds=60
         )

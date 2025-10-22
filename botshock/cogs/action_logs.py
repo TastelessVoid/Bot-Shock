@@ -10,6 +10,7 @@ import disnake
 from disnake.ext import commands
 
 from botshock.core.bot_protocol import SupportsBotAttrs
+from botshock.utils.decorators import defer_response
 
 logger = logging.getLogger("BotShock.ActionLogs")
 
@@ -150,13 +151,13 @@ def _generate_csv_export(logs: list) -> str:
 
 
 class ActionLogs(commands.Cog):
-    """Commands for viewing and exporting controller action logs"""
+    """Commands for viewing and exporting controller action history"""
 
     def __init__(self, bot: SupportsBotAttrs):
         self.bot = bot
         self.db = bot.db
-        self.formatter = bot.formatter  # Use shared formatter
-        self.helper = bot.command_helper  # Use shared command helper
+        self.formatter = bot.formatter
+        self.helper = bot.command_helper
 
     @commands.slash_command(description="View and manage your controller action logs")
     async def logs(self, inter: disnake.ApplicationCommandInteraction):
@@ -164,6 +165,7 @@ class ActionLogs(commands.Cog):
         pass
 
     @logs.sub_command(description="View recent controller actions on your device")
+    @defer_response(ephemeral=True)
     async def view(
         self,
         inter: disnake.ApplicationCommandInteraction,
@@ -173,13 +175,7 @@ class ActionLogs(commands.Cog):
         page: int = commands.Param(description="Page number (10 logs per page)", ge=1, default=1),
     ):
         """View recent controller actions on your device"""
-        await self.helper.defer_response(inter)
 
-        # Check if user is registered using helper
-        if not await self.helper.require_user_registered(inter, inter.author.id, inter.guild.id):
-            return
-
-        # Get action logs
         logs_per_page = 10
         offset = (page - 1) * logs_per_page
         logs = await self.db.get_action_logs_for_target(
@@ -241,7 +237,8 @@ class ActionLogs(commands.Cog):
 
         await inter.edit_original_response(embed=embed, view=view)
 
-    @logs.sub_command(description="Export your controller action logs to a text file")
+    @logs.sub_command(description="Export action logs to a file")
+    @defer_response(ephemeral=True)
     async def export(
         self,
         inter: disnake.ApplicationCommandInteraction,
@@ -253,11 +250,6 @@ class ActionLogs(commands.Cog):
         ),
     ):
         """Export controller action logs to a downloadable file"""
-        await self.helper.defer_response(inter)
-
-        # Check if user is registered using helper
-        if not await self.helper.require_user_registered(inter, inter.author.id, inter.guild.id):
-            return
 
         # Get all action logs (up to 1000)
         logs = await self.db.get_action_logs_for_target(
@@ -419,7 +411,8 @@ class ActionLogs(commands.Cog):
 
         return "\n".join(lines)
 
-    @logs.sub_command(description="View statistics about controller actions on your device")
+    @logs.sub_command(description="View action statistics")
+    @defer_response(ephemeral=True)
     async def stats(
         self,
         inter: disnake.ApplicationCommandInteraction,
@@ -428,11 +421,6 @@ class ActionLogs(commands.Cog):
         ),
     ):
         """View statistics about controller actions"""
-        await self.helper.defer_response(inter)
-
-        # Check if user is registered using helper
-        if not await self.helper.require_user_registered(inter, inter.author.id, inter.guild.id):
-            return
 
         # Get all logs for analysis
         logs = await self.db.get_action_logs_for_target(

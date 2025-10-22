@@ -8,6 +8,7 @@ import disnake
 from disnake.ext import commands
 
 from botshock.core.bot_protocol import SupportsBotAttrs
+from botshock.utils.decorators import defer_response
 
 logger = logging.getLogger("BotShock.ControllerPreferences")
 
@@ -18,15 +19,21 @@ class ControllerPreferences(commands.Cog):
     def __init__(self, bot: SupportsBotAttrs):
         self.bot = bot
         self.db = bot.db
-        self.formatter = bot.formatter  # Use shared formatter
+        self.formatter = bot.formatter
 
     @commands.slash_command(description="Manage your controller preferences and default settings")
     async def preferences(self, inter: disnake.ApplicationCommandInteraction):
         """Base command for preference management"""
         pass
 
-    @preferences.sub_command(description="Set your default shock settings")
-    async def set_defaults(
+    @preferences.sub_command_group(name="defaults", description="Manage your default shock settings")
+    async def defaults_group(self, inter: disnake.ApplicationCommandInteraction):
+        """Manage default settings"""
+        pass
+
+    @defaults_group.sub_command(description="Set your default shock settings")
+    @defer_response(ephemeral=True)
+    async def set(
         self,
         inter: disnake.ApplicationCommandInteraction,
         intensity: int = commands.Param(
@@ -46,7 +53,6 @@ class ControllerPreferences(commands.Cog):
         ),
     ):
         """Set your default shock settings"""
-        await inter.response.defer(ephemeral=True)
 
         target_id = target_user.id if target_user else None
         target_name = target_user.display_name if target_user else "all users"
@@ -104,7 +110,8 @@ class ControllerPreferences(commands.Cog):
 
         await inter.edit_original_response(embed=embed)
 
-    @preferences.sub_command(description="View your current preferences and defaults")
+    @defaults_group.sub_command(description="View your current preferences")
+    @defer_response(ephemeral=True)
     async def view(
         self,
         inter: disnake.ApplicationCommandInteraction,
@@ -113,7 +120,6 @@ class ControllerPreferences(commands.Cog):
         ),
     ):
         """View your current preferences"""
-        await inter.response.defer(ephemeral=True)
 
         target_id = target_user.id if target_user else None
         prefs = await self.db.get_controller_preferences(inter.author.id, inter.guild.id, target_id)
@@ -189,14 +195,14 @@ class ControllerPreferences(commands.Cog):
 
         await inter.edit_original_response(embed=embed)
 
-    @preferences.sub_command(description="Toggle smart defaults on/off")
+    @defaults_group.sub_command(description="Toggle smart defaults on/off")
+    @defer_response(ephemeral=True)
     async def toggle(
         self,
         inter: disnake.ApplicationCommandInteraction,
         enabled: bool = commands.Param(description="Enable or disable smart defaults"),
     ):
         """Toggle smart defaults on or off"""
-        await inter.response.defer(ephemeral=True)
 
         success = await self.db.set_controller_defaults(
             inter.author.id, inter.guild.id, use_smart_defaults=enabled

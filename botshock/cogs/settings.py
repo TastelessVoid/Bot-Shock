@@ -8,6 +8,7 @@ import disnake
 from disnake.ext import commands
 
 from botshock.core.bot_protocol import SupportsBotAttrs
+from botshock.utils.decorators import defer_response
 
 logger = logging.getLogger("BotShock.Settings")
 
@@ -46,11 +47,16 @@ class Settings(commands.Cog):
         """Base command for settings management"""
         pass
 
-    @settings.sub_command(description="Set control roles for this server")
-    async def set_control_roles(self, inter: disnake.ApplicationCommandInteraction):
+    @settings.sub_command_group(name="config", description="Configure bot settings")
+    async def config_group(self, inter: disnake.ApplicationCommandInteraction):
+        """Configure bot settings"""
+        pass
+
+    @config_group.sub_command(description="Set control roles for this server")
+    @defer_response(ephemeral=True)
+    async def roles(self, inter: disnake.ApplicationCommandInteraction):
         """Set which roles can manage other users' devices and triggers"""
 
-        # Check if user has Manage Roles permission
         if not self.permission_checker.has_manage_roles_permission(inter.author):
             embed = self.formatter.error_embed(
                 "Permission Denied",
@@ -156,10 +162,15 @@ class Settings(commands.Cog):
             )
             await inter.response.send_message(embed=embed, ephemeral=True)
 
-    @settings.sub_command(description="View current bot settings for this server")
+    @settings.sub_command_group(name="admin", description="Administrative and maintenance operations")
+    async def admin_group(self, inter: disnake.ApplicationCommandInteraction):
+        """Administrative operations"""
+        pass
+
+    @config_group.sub_command(description="View current server settings")
+    @defer_response(ephemeral=True)
     async def view(self, inter: disnake.ApplicationCommandInteraction):
         """View current bot settings"""
-        await inter.response.defer(ephemeral=True)
 
         guild_settings = await self.db.get_guild_settings(inter.guild.id)
 
@@ -221,7 +232,8 @@ class Settings(commands.Cog):
 
         await inter.edit_original_response(embed=embed)
 
-    @settings.sub_command(description="Reset all bot settings for this server")
+    @admin_group.sub_command(description="Reset all bot settings for this server")
+    @defer_response(ephemeral=True)
     async def reset(self, inter: disnake.ApplicationCommandInteraction):
         """Reset bot settings to defaults (keeps user data)"""
 
@@ -286,8 +298,9 @@ class Settings(commands.Cog):
 
         await inter.edit_original_response(embed=embed, view=None)
 
-    @settings.sub_command(description="Clear ALL bot data for this server (DESTRUCTIVE)")
-    async def clear_all_data(self, inter: disnake.ApplicationCommandInteraction):
+    @admin_group.sub_command(description="Clear ALL bot data for this server (DESTRUCTIVE)")
+    @defer_response(ephemeral=True)
+    async def clear_data(self, inter: disnake.ApplicationCommandInteraction):
         """Clear all bot data including users, triggers, reminders (DESTRUCTIVE)"""
 
         if not inter.author.guild_permissions.administrator:
@@ -408,7 +421,8 @@ class Settings(commands.Cog):
 
         await inter.edit_original_response(embed=embed, view=None)
 
-    @settings.sub_command(description="Export server configuration as text")
+    @admin_group.sub_command(description="Export server configuration as text")
+    @defer_response(ephemeral=True)
     async def export(self, inter: disnake.ApplicationCommandInteraction):
         """Export current server configuration"""
 
@@ -424,7 +438,6 @@ class Settings(commands.Cog):
             await inter.response.send_message(embed=embed, ephemeral=True)
             return
 
-        await inter.response.defer(ephemeral=True)
 
         # Gather all data
         guild_settings = await self.db.get_guild_settings(inter.guild.id)
